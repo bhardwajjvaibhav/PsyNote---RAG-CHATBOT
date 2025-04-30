@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Mental Health Assistant</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 2rem;
+      background: #f9f9f9;
+    }
+    h1 {
+      color: #333;
+    }
+    #chat {
+      border: 1px solid #ccc;
+      padding: 1rem;
+      height: 300px;
+      overflow-y: auto;
+      background: #fff;
+      margin: 1rem 0;
+    }
+    .user {
+      font-weight: bold;
+      color: #2b7a78;
+    }
+    .bot {
+      color: #17252a;
+    }
+    #status {
+      margin-top: 0.5rem;
+      font-size: 0.9rem;
+      color: green;
+    }
+    input[type="text"] {
+      padding: 0.5rem;
+      font-size: 1rem;
+    }
+    button {
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+      margin-left: 0.5rem;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>🧠 Mental Health Assistant</h1>
+
+  <!-- ✅ Updated Upload Form Section -->
+  <form id="upload-form">
+    <label for="file">📂 Upload your journal (.txt): </label>
+    <input type="file" name="file" id="file" accept=".txt" />
+    <button type="submit">Upload Journal</button>
+    <div id="status"></div>
+  </form>
+
+  <!-- Chat Display -->
+  <div id="chat"></div>
+
+  <!-- Chat Form -->
+  <form id="chat-form" onsubmit="sendMessage(event)">
+    <input type="text" id="question" placeholder="Type your question..." style="width: 75%" required />
+    <button type="submit">Send</button>
+  </form>
+
+  <script>
+    const chatBox = document.getElementById("chat");
+    const statusDiv = document.getElementById("status");
+
+    function appendMessage(sender, message) {
+      const p = document.createElement("p");
+      p.innerHTML = `<span class="${sender}">${sender === 'user' ? 'You' : 'Assistant'}:</span> ${message.replace(/\n/g, "<br>")}`;
+      chatBox.appendChild(p);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    // ✅ Upload form handler (your version)
+    document.getElementById("upload-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fileInput = document.getElementById("file");
+      if (!fileInput.files.length) return alert("Please select a file.");
+
+      const formData = new FormData();
+      formData.append("file", fileInput.files[0]);
+
+      try {
+        const response = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        const data = await response.json();
+        alert(data.message || "Upload failed");
+      } catch (err) {
+        alert("Error: " + err.message);
+      }
+    });
+
+    async function sendMessage(event) {
+      event.preventDefault();
+      const questionInput = document.getElementById("question");
+      const question = questionInput.value.trim();
+      if (!question) return;
+
+      appendMessage("user", question);
+      questionInput.value = "";
+      questionInput.disabled = true;
+
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question }),
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          appendMessage("bot", data.answer);
+        } else {
+          appendMessage("bot", "❌ Error: " + (data.detail || "Unknown error"));
+        }
+      } catch (err) {
+        appendMessage("bot", "❌ Error: " + err.message);
+      }
+
+      questionInput.disabled = false;
+      questionInput.focus();
+    }
+  </script>
+</body>
+</html>
