@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+python-multipart      # required by FastAPI for UploadFile/Form parsing (/api/ingest)
+pydantic
+python-dotenv          # loads OPENROUTER_API_KEY etc. from the project-root .env file
+
+chromadb
+rank-bm25
+sentence-transformers
+pypdf
+requests

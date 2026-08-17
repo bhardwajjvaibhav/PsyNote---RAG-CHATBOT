@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PsyNote - Premium RAG Interface</title>
+    <meta name="description" content="AI Assistant for therapy sessions and patient notes.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div id="app-container">
+        <!-- Sidebar: Patient List -->
+        <aside id="sidebar">
+            <div class="sidebar-header">
+                <h1>PsyNote</h1>
+            </div>
+            <div class="patient-controls">
+                <button id="btn-add-patient" class="primary-btn">+ New Patient</button>
+            </div>
+            <ul id="patient-list" class="list-container">
+                <!-- Dynamically populated -->
+            </ul>
+        </aside>
+
+        <!-- Main Content -->
+        <main id="main-content">
+            <header id="main-header">
+                <div class="header-info">
+                    <h2 id="current-patient-name">Select a Patient</h2>
+                </div>
+                <div class="header-actions">
+                    <button id="btn-delete-patient" class="danger-btn" style="display: none;">Delete Patient</button>
+                </div>
+            </header>
+
+            <div id="workspace" class="split-view" style="display: none;">
+                <!-- Left Column: Ingestion & Notes -->
+                <section class="panel" id="panel-ingestion">
+                    <h3>Documents</h3>
+                    <div class="upload-section glass-panel">
+                        <form id="upload-form">
+                            <label for="note-upload" class="file-label">
+                                <span id="file-name-display">Choose a PDF or TXT file...</span>
+                                <input type="file" id="note-upload" accept=".pdf,.txt" required>
+                            </label>
+                            <button type="submit" id="btn-upload" class="primary-btn">Upload Note</button>
+                        </form>
+                        <div id="upload-status"></div>
+                    </div>
+                    
+                    <div class="notes-section">
+                        <h4>Ingested Notes</h4>
+                        <ul id="notes-list" class="list-container">
+                            <!-- Dynamically populated -->
+                        </ul>
+                    </div>
+                </section>
+
+                <!-- Right Column: Chat -->
+                <section class="panel" id="panel-chat">
+                    <h3>AI Assistant</h3>
+                    <div class="chat-container glass-panel">
+                        <div id="chat-history">
+                            <div class="message system">
+                                Hello! I'm ready to answer questions about the selected patient's notes.
+                            </div>
+                        </div>
+                        <form id="chat-form">
+                            <input type="text" id="chat-input" placeholder="Ask a question..." required autocomplete="off">
+                            <button type="submit" id="btn-send-chat" class="primary-btn">Send</button>
+                        </form>
+                    </div>
+                </section>
+            </div>
+            
+            <div id="empty-state" class="empty-state">
+                <div class="glass-panel">
+                    <p>Select a patient from the sidebar or create a new one to begin.</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="modal-overlay" class="modal-overlay" style="display: none;">
+        <div class="modal glass-panel">
+            <h3 id="modal-title">New Patient</h3>
+            <input type="text" id="modal-input" placeholder="Patient Name">
+            <div class="modal-actions">
+                <button id="btn-modal-cancel" class="secondary-btn">Cancel</button>
+                <button id="btn-modal-confirm" class="primary-btn">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
