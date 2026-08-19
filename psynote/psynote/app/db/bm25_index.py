@@ -163,6 +163,22 @@ def search(patient_id: str, query_text: str, top_k: int = 20) -> list[dict]:
 
 # --- Step 3: delete path -----------------------------------------------------
 
+def list_chunks(patient_id: str) -> list[dict]:
+    """
+    Return every chunk stored for this patient (chunk_id, note_id, text).
+    Used by the mood/insights flow, which analyzes a user's full note
+    corpus rather than a retrieval query. Same per-patient isolation as
+    search(): only this patient's corpus file is read.
+    """
+    if not patient_id or not patient_id.strip():
+        raise ValueError("patient_id cannot be empty")
+    corpus = _load_corpus(patient_id)
+    return [
+        {"chunk_id": cid, "note_id": v["note_id"], "text": v["text"]}
+        for cid, v in corpus.items()
+    ]
+
+
 def delete_note_chunks(patient_id: str, note_id: str) -> None:
     """Remove all chunks belonging to one note from this patient's corpus."""
     corpus = _load_corpus(patient_id)
@@ -239,6 +255,13 @@ if __name__ == "__main__":
     assert len(hits_a_updated) == 1  # still 1, overwrote not duplicated
     assert "100mg" in hits_a_updated[0]["text"]
     print("OK, chunk count unchanged after upsert, text updated.")
+
+    print("\n=== list_chunks returns all chunks for a patient, isolated ===")
+    all_a = list_chunks("patient_a")
+    assert len(all_a) == 2
+    assert all(c["note_id"] == "note_1" for c in all_a)
+    assert list_chunks("patient_c_never_indexed") == []
+    print([(c["chunk_id"], c["note_id"]) for c in all_a])
 
     print("\n=== delete_note_chunks removes only that note's chunks ===")
     upsert_chunks(

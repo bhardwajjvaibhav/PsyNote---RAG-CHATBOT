@@ -49,7 +49,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from core import fusion, post_validate, reranker, llm_client, safety_scanner
+from core import fusion, post_validate, reranker, llm_client, safety_scanner, emotion
 from services import chunker, embedder, parser
 from db import doc_registry, vector_store, bm25_index
 
@@ -74,6 +74,34 @@ class IngestResult:
     status: str                 # "indexed" or "failed"
     chunk_count: int = 0
     error: str | None = None
+
+
+def _index_note(
+    patient_id: str,
+    note_id: str,
+    text: str,
+    chunk_fn,
+    embed_fn,
+    vector_upsert_fn,
+    bm25_upsert_fn,
+) -> list[dict]:
+    """
+    Shared tail of the ingestion flow (used by ingest_note and
+    ingest_text): chunk -> embed -> write Chroma + BM25, returning the
+    chunks. Raises on failure -- callers catch and call
+    doc_registry.mark_failed, per the write-ordering fix in Section 3.
+    """
+    chunks = chunk_fn(note_id, text)
+    if not chunks:
+        raise ValueError("chunking produced zero chunks from note text")
+
+    chunk_ids = [c["chunk_id"] for c in chunks]
+    chunk_texts = [c["text"] for c in chunks]
+    embeddings = embed_fn(chunk_texts)
+
+    vector_upsert_fn(patient_id, note_id, chunk_ids, chunk_texts, embeddings)
+    bm25_upsert_fn(patient_id, note_id, chunk_ids, chunk_texts)
+    return chunks
 
 
 def ingest_note(
@@ -110,16 +138,53 @@ def ingest_note(
 
     try:
         text = parse(filename, raw_bytes)
-        chunks = chunk(note_id, text)
-        if not chunks:
-            raise ValueError("chunking produced zero chunks from parsed text")
+        chunks = _index_note(
+            patient_id, note_id, text,
+            chunk_fn=chunk, embed_fn=embed,
+            vector_upsert_fn=vector_upsert, bm25_upsert_fn=bm25_upsert,
+        )
 
-        chunk_ids = [c["chunk_id"] for c in chunks]
-        chunk_texts = [c["text"] for c in chunks]
-        embeddings = embed(chunk_texts)
+    except Exception as e:
+        doc_registry.mark_failed(note_id, str(e))
+        return IngestResult(note_id=note_id, status="failed", error=str(e))
 
-        vector_upsert(patient_id, note_id, chunk_ids, chunk_texts, embeddings)
-        bm25_upsert(patient_id, note_id, chunk_ids, chunk_texts)
+    doc_registry.mark_indexed(note_id)
+    return IngestResult(note_id=note_id, status="indexed", chunk_count=len(chunks))
+
+
+def ingest_text(
+    patient_id: str,
+    title: str,
+    text: str,
+    chunk_fn=None,
+    embed_fn=None,
+    vector_upsert_fn=None,
+    bm25_upsert_fn=None,
+) -> IngestResult:
+    """
+    Ingest a note written directly as text (no file to parse) -- the
+    frontend's "create a new note" path. Same pipeline as ingest_note
+    minus the parse step: the text is already plain.
+    """
+    chunk = chunk_fn or chunker.chunk_note
+    embed = embed_fn or embedder.embed_texts
+    vector_upsert = vector_upsert_fn or vector_store.upsert_chunks
+    bm25_upsert = bm25_upsert_fn or bm25_index.upsert_chunks
+
+    if not title or not title.strip():
+        raise ValueError("title cannot be empty")
+    if not text or not text.strip():
+        raise ValueError("text cannot be empty")
+
+    note = doc_registry.create_note(patient_id, title.strip())
+    note_id = note["id"]
+
+    try:
+        chunks = _index_note(
+            patient_id, note_id, text.strip(),
+            chunk_fn=chunk, embed_fn=embed,
+            vector_upsert_fn=vector_upsert, bm25_upsert_fn=bm25_upsert,
+        )
 
     except Exception as e:
         doc_registry.mark_failed(note_id, str(e))
@@ -130,6 +195,44 @@ def ingest_note(
 
 
 # --- Query-time flow (Section 4) --------------------------------------------
+
+def analyze_mood(
+    patient_id: str,
+    list_notes_fn=None,
+    list_chunks_fn=None,
+) -> emotion.MoodReport:
+    """
+    Insights flow for the dashboard's emotional-energy chart: gather a
+    user's indexed notes (metadata from doc_registry, full chunk texts
+    from the BM25 corpus), reconstruct each note's text, and run the
+    rule-based emotion analyzer (core/emotion.py) over it.
+
+    Same injectable-collaborator shape as everything else: tests pass
+    fake list_notes_fn / list_chunks_fn so no DB/file access is needed.
+    """
+    list_notes = list_notes_fn or doc_registry.list_notes_for_patient
+    list_chunks = list_chunks_fn or bm25_index.list_chunks
+
+    notes = list_notes(patient_id, status="indexed")
+    chunks = list_chunks(patient_id)
+
+    texts_by_note: dict[str, list[str]] = {}
+    for c in chunks:
+        texts_by_note.setdefault(c["note_id"], []).append(c["text"])
+
+    records = [
+        {
+            "note_id": n["id"],
+            "title": n["filename"],
+            "created_at": n["created_at"],
+            "text": "\n\n".join(texts_by_note[n["id"]]),
+        }
+        for n in notes
+        if n["id"] in texts_by_note and texts_by_note[n["id"]]
+    ]
+
+    return emotion.analyze_notes(records)
+
 
 def _window_history(chat_history: list[dict] | None, turns: int) -> list[dict]:
     """Keep only the last `turns` (user, assistant) pairs, i.e. the last 2*turns messages."""
@@ -309,6 +412,32 @@ if __name__ == "__main__":
     assert result_empty.status == "failed"
     print(result_empty)
 
+    print("\n=== ingest_text: raw text straight through the same write pipeline ===")
+    result_text = ingest_text(
+        "patient_a", "typed_note_1", "Patient typed this note directly, sleep improved.",
+        chunk_fn=lambda note_id, text: [{"chunk_id": f"{note_id}::chunk0", "note_id": note_id, "text": text}],
+        embed_fn=lambda texts: [[0.1, 0.2, 0.3] for _ in texts],
+        vector_upsert_fn=lambda *a: vector_calls.append(a),
+        bm25_upsert_fn=lambda *a: bm25_calls.append(a),
+    )
+    print(result_text)
+    assert result_text.status == "indexed"
+    assert result_text.chunk_count == 1
+    assert fake_registry.notes[result_text.note_id]["status"] == "indexed"
+
+    print("\n=== ingest_text: empty text -> ValueError, not a silent no-op ===")
+    try:
+        ingest_text(
+            "patient_a", "typed_note_2", "   ",
+            chunk_fn=lambda note_id, text: [],
+            embed_fn=lambda texts: [],
+            vector_upsert_fn=lambda *a: None,
+            bm25_upsert_fn=lambda *a: None,
+        )
+        print("FAILED: should have raised ValueError")
+    except ValueError as e:
+        print(f"OK, raised: {e}")
+
     print("\n=== answer_query: full flow with fakes, grounded answer ===")
 
     fake_chroma_hits = [
@@ -366,5 +495,23 @@ if __name__ == "__main__":
     # system + 2 turns (4 messages) + final question = 6
     assert len(captured_messages["messages"]) == 1 + 4 + 1
     print(f"OK, {len(captured_messages['messages'])} messages sent (windowed to 2 turns).")
+
+    print("\n=== analyze_mood: orchestrates notes + chunks into a MoodReport ===")
+    mood = analyze_mood(
+        "patient_a",
+        list_notes_fn=lambda pid, status=None: [
+            {"id": "n1", "filename": "session_1.txt", "created_at": "2026-08-01"},
+            {"id": "n2", "filename": "session_2.txt", "created_at": "2026-08-08"},
+        ],
+        list_chunks_fn=lambda pid: [
+            {"chunk_id": "n1::chunk0", "note_id": "n1", "text": "Felt hopeful and calm today, slept well."},
+            {"chunk_id": "n2::chunk0", "note_id": "n2", "text": "Anxious and stressed, deadline pressure at work."},
+        ],
+    )
+    print("notes:", len(mood.notes), "| overall:", mood.overall)
+    assert len(mood.notes) == 2
+    assert "stressed" in mood.overall and 0 <= mood.overall["stressed"] <= 1
+    assert any(r.note_id == "n2" for r in mood.reasons["stressed"])
+    assert "hopeful" in mood.notes[0].hits["happy"]
 
     print("\nSelf-test passed.")

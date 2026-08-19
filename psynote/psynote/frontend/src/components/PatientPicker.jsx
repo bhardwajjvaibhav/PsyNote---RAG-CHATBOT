@@ -4,18 +4,18 @@ import { listPatients } from "../api/patients";
 /**
  * PatientPicker
  *
- * On mount: GET /api/patients -> renders a searchable list of active patients.
- * On select: lifts selectedPatientId up via onSelectPatient(patient).
+ * On mount: GET /api/patients -> renders a searchable list of registered
+ * users. On select: lifts the selected id up via onSelectUser(user).
  *
- * This component owns nothing beyond "which patient is selected" -- it
+ * This component owns nothing beyond "which user is selected" -- it
  * does not know about ingestion, chat, or anything downstream. Session
  * notes upload is a hard dependent (see architecture doc, Section 2.5):
- * nothing can be tagged with patient_id until a patient exists here.
- * Creating a patient is likewise a separate concern -- see
+ * nothing can be tagged with an account until one exists here.
+ * Creating a user is likewise a separate concern -- see
  * NewPatientForm.jsx -- kept out of this component on purpose.
  */
-export default function PatientPicker({ selectedPatientId, onSelectPatient }) {
-  const [patients, setPatients] = useState([]);
+export default function PatientPicker({ selectedUserId, onSelectUser }) {
+  const [users, setUsers] = useState([]);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("loading"); // loading | ready | error
   const [errorMessage, setErrorMessage] = useState("");
@@ -28,12 +28,12 @@ export default function PatientPicker({ selectedPatientId, onSelectPatient }) {
       try {
         const data = await listPatients();
         if (!cancelled) {
-          setPatients(data);
+          setUsers(data);
           setStatus("ready");
         }
       } catch (err) {
         if (!cancelled) {
-          setErrorMessage(err.message || "Failed to load patients");
+          setErrorMessage(err.message || "Failed to load users");
           setStatus("error");
         }
       }
@@ -47,47 +47,47 @@ export default function PatientPicker({ selectedPatientId, onSelectPatient }) {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return patients;
-    return patients.filter((p) => p.name.toLowerCase().includes(q));
-  }, [patients, query]);
+    if (!q) return users;
+    return users.filter((p) => p.name.toLowerCase().includes(q));
+  }, [users, query]);
 
   return (
     <div style={styles.container}>
-      <label htmlFor="patient-search" style={styles.label}>
-        Patient
+      <label htmlFor="user-search" style={styles.label}>
+        User
       </label>
       <input
-        id="patient-search"
+        id="user-search"
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search patients by name"
+        placeholder="Search users by name"
         style={styles.input}
         disabled={status === "loading"}
-        aria-describedby="patient-picker-status"
+        aria-describedby="user-picker-status"
       />
 
-      <div id="patient-picker-status" aria-live="polite" style={styles.statusText}>
-        {status === "loading" && "Loading patients…"}
-        {status === "error" && `Couldn't load patients: ${errorMessage}`}
-        {status === "ready" && patients.length === 0 && "No patients yet."}
+      <div id="user-picker-status" aria-live="polite" style={styles.statusText}>
+        {status === "loading" && "Loading users…"}
+        {status === "error" && `Couldn't load users: ${errorMessage}`}
+        {status === "ready" && users.length === 0 && "No users yet."}
         {status === "ready" &&
-          patients.length > 0 &&
+          users.length > 0 &&
           filtered.length === 0 &&
-          "No patients match your search."}
+          "No users match your search."}
       </div>
 
       {status === "ready" && filtered.length > 0 && (
-        <ul style={styles.list} role="listbox" aria-label="Active patients">
+        <ul style={styles.list} role="listbox" aria-label="Users">
           {filtered.map((p) => {
-            const isSelected = p.id === selectedPatientId;
+            const isSelected = p.id === selectedUserId;
             return (
               <li key={p.id}>
                 <button
                   type="button"
                   role="option"
                   aria-selected={isSelected}
-                  onClick={() => onSelectPatient(p)}
+                  onClick={() => onSelectUser(p)}
                   style={{
                     ...styles.patientButton,
                     ...(isSelected ? styles.patientButtonSelected : {}),

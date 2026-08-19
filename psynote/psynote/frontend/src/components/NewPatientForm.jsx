@@ -5,13 +5,13 @@ import { createPatient } from "../api/patients";
  * NewPatientForm
  *
  * Separate from PatientPicker on purpose -- PatientPicker's docstring
- * says it "owns nothing beyond which patient is selected". Creating a
- * patient is a different concern (a POST, and a decision about what
- * happens to the new record), so it gets its own small component
- * rather than growing PatientPicker's responsibilities.
+ * says it "owns nothing beyond which user is selected". Creating a user
+ * is a different concern (a POST, and a decision about what happens to
+ * the new record), so it gets its own small component rather than
+ * growing PatientPicker's responsibilities.
  *
- * On success, calls onCreated(patient) so the parent can refresh
- * PatientPicker's list and select the new patient immediately.
+ * On success, calls onCreated(user) so the parent can refresh
+ * PatientPicker's list and select the new user immediately.
  */
 export default function NewPatientForm({ onCreated }) {
   const [name, setName] = useState("");
@@ -30,28 +30,28 @@ export default function NewPatientForm({ onCreated }) {
     setStatus("saving");
     setMessage("");
     try {
-      const patient = await createPatient(trimmed);
+      const user = await createPatient(trimmed);
       setName("");
       setStatus("idle");
-      onCreated?.(patient);
+      onCreated?.(user);
     } catch (err) {
       setStatus("error");
-      setMessage(err.message || "Failed to create patient.");
+      setMessage(err.message || "Failed to create user.");
     }
   }
 
   return (
     <form onSubmit={handleSubmit} style={styles.container}>
-      <label htmlFor="new-patient-name" style={styles.label}>
-        Add patient
+      <label htmlFor="new-user-name" style={styles.label}>
+        Add user
       </label>
       <div style={styles.row}>
         <input
-          id="new-patient-name"
+          id="new-user-name"
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Patient name"
+          placeholder="User name"
           disabled={status === "saving"}
           style={styles.input}
         />

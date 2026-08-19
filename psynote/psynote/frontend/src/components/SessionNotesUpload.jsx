@@ -1,12 +1,13 @@
 import { useState, useRef } from "react";
 import { ingestNote } from "../api/notes";
+import { theme, buttonStyle } from "../theme";
 
 /**
  * SessionNotesUpload
  *
- * Shown once a patient is selected (parent guarantees selectedPatientId
- * is non-null before mounting this -- see architecture doc, Section 2.5:
- * "the upload form has nothing to tag notes with until a patient is
+ * Shown once an account is signed in (the parent guarantees a non-null
+ * account id before mounting this -- see architecture doc, Section 2.5:
+ * "the upload form has nothing to tag notes with until a user is
  * chosen first").
  *
  * Accepts .txt / .pdf / .csv. On submit, POSTs multipart/form-data to
@@ -59,11 +60,11 @@ export default function SessionNotesUpload({ patientId, patientName, onUploaded 
       return;
     }
     if (!patientId) {
-      // Defensive only -- parent should never mount this without a
-      // selected patient (see Section 2.5). Still, never send an
-      // ingest request with no patient_id to tag it with.
+      // Defensive only -- parent should never mount this without an
+      // account (see Section 2.5). Still, never send an ingest request
+      // with no account id to tag it with.
       setStatus("error");
-      setMessage("No patient selected.");
+      setMessage("No account selected.");
       return;
     }
 
@@ -88,7 +89,7 @@ export default function SessionNotesUpload({ patientId, patientName, onUploaded 
       onUploaded?.(result);
     } catch (err) {
       // A thrown error here means the HTTP request itself failed
-      // (network, unknown patient -> 404, unsupported extension -> 400)
+      // (network, unknown account -> 404, unsupported extension -> 400)
       // -- distinct from a pipeline-level "failed" status above, which
       // arrives as a normal 201.
       setStatus("error");
@@ -116,7 +117,7 @@ export default function SessionNotesUpload({ patientId, patientName, onUploaded 
         type="submit"
         disabled={status === "uploading" || !file}
         style={{
-          ...styles.button,
+          ...buttonStyle("primary"),
           ...(status === "uploading" || !file ? styles.buttonDisabled : {}),
         }}
       >
@@ -142,9 +143,7 @@ const styles = {
     display: "flex",
     flexDirection: "column",
     gap: "0.6rem",
-    maxWidth: "360px",
-    fontFamily: "system-ui, sans-serif",
-    marginTop: "1rem",
+    fontFamily: theme.font,
   },
   header: {
     display: "flex",
@@ -154,39 +153,31 @@ const styles = {
   label: {
     fontSize: "0.85rem",
     fontWeight: 600,
-    color: "#333",
+    color: theme.text,
   },
   patientTag: {
     fontSize: "0.8rem",
-    color: "#666",
+    color: theme.textMuted,
   },
   fileInput: {
     fontSize: "0.85rem",
-  },
-  button: {
-    alignSelf: "flex-start",
-    padding: "0.45rem 1rem",
-    fontSize: "0.9rem",
-    fontWeight: 600,
-    color: "#fff",
-    background: "#2f6fed",
-    border: "none",
-    borderRadius: "6px",
+    color: theme.textMuted,
+    fontFamily: theme.font,
     cursor: "pointer",
   },
   buttonDisabled: {
-    background: "#a9c0f0",
+    opacity: 0.6,
     cursor: "not-allowed",
   },
   statusText: {
     fontSize: "0.8rem",
-    color: "#666",
+    color: theme.textFaint,
     minHeight: "1.1em",
   },
   statusError: {
-    color: "#c0392b",
+    color: theme.danger,
   },
   statusSuccess: {
-    color: "#2f8f5b",
+    color: theme.success,
   },
 };

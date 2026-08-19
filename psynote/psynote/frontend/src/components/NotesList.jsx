@@ -1,19 +1,20 @@
 import { useState, useEffect, useCallback } from "react";
 import { listNotes } from "../api/notes";
+import { theme } from "../theme";
 
 /**
  * NotesList
  *
- * Read-only view of a patient's ingested notes (GET
+ * Read-only view of an account's ingested notes (GET
  * /api/patients/{id}/notes), so the "pending -> indexed / failed"
  * lifecycle from doc_registry.py's status field is actually visible
  * somewhere, not just implied by SessionNotesUpload's one-shot message.
  *
- * `refreshKey` is a bump-to-refetch prop: SessionNotesUpload's
- * onUploaded callback increments it in the parent (App.jsx) so a fresh
- * upload shows up here without polling.
+ * `refreshKey` is a bump-to-refetch prop: an upload/created note bumps
+ * it in the parent (Dashboard.jsx) so a fresh note shows up here
+ * without polling.
  */
-export default function NotesList({ patientId, refreshKey }) {
+export default function NotesList({ patientId, patientName, refreshKey }) {
   const [notes, setNotes] = useState([]);
   const [status, setStatus] = useState("loading"); // loading | ready | error
   const [errorMessage, setErrorMessage] = useState("");
@@ -50,7 +51,7 @@ export default function NotesList({ patientId, refreshKey }) {
         <div style={styles.statusError}>Couldn't load notes: {errorMessage}</div>
       )}
       {status === "ready" && notes.length === 0 && (
-        <div style={styles.statusText}>No notes ingested for this patient yet.</div>
+        <div style={styles.statusText}>No notes ingested yet{patientName ? ` for ${patientName}` : ""}.</div>
       )}
 
       {status === "ready" && notes.length > 0 && (
@@ -71,10 +72,10 @@ export default function NotesList({ patientId, refreshKey }) {
 }
 
 function pillStyleFor(status) {
-  if (status === "indexed") return { background: "#e6f4ea", color: "#237a44" };
-  if (status === "pending") return { background: "#fdf3d8", color: "#8a6a1a" };
-  if (status === "failed") return { background: "#fbe4dd", color: "#b4491f" };
-  return { background: "#eee", color: "#666" };
+  if (status === "indexed") return { background: "#1a3323", color: theme.success };
+  if (status === "pending") return { background: "#332b16", color: theme.mustard };
+  if (status === "failed") return { background: "#331d15", color: theme.danger };
+  return { background: theme.bg, color: theme.textMuted };
 }
 
 const styles = {
@@ -82,9 +83,7 @@ const styles = {
     display: "flex",
     flexDirection: "column",
     gap: "0.5rem",
-    maxWidth: "420px",
-    fontFamily: "system-ui, sans-serif",
-    marginTop: "1.25rem",
+    fontFamily: theme.font,
   },
   headerRow: {
     display: "flex",
@@ -94,23 +93,24 @@ const styles = {
   label: {
     fontSize: "0.85rem",
     fontWeight: 600,
-    color: "#333",
+    color: theme.text,
   },
   refreshButton: {
     background: "none",
     border: "none",
-    color: "#2f6fed",
+    color: theme.gold,
     fontSize: "0.8rem",
     cursor: "pointer",
     padding: 0,
+    fontFamily: theme.font,
   },
   statusText: {
     fontSize: "0.8rem",
-    color: "#666",
+    color: theme.textMuted,
   },
   statusError: {
     fontSize: "0.8rem",
-    color: "#c0392b",
+    color: theme.danger,
   },
   list: {
     listStyle: "none",
@@ -124,12 +124,15 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: "0.5rem",
-    padding: "0.4rem 0",
-    borderBottom: "1px solid #eee",
+    padding: "0.45rem 0.6rem",
+    border: `1px solid ${theme.border}`,
+    borderRadius: "8px",
+    background: theme.bg,
     flexWrap: "wrap",
   },
   filename: {
     fontSize: "0.85rem",
+    color: theme.text,
     flex: 1,
     minWidth: 0,
     overflow: "hidden",
@@ -147,6 +150,6 @@ const styles = {
   errorDetail: {
     flexBasis: "100%",
     fontSize: "0.75rem",
-    color: "#b4491f",
+    color: theme.danger,
   },
 };

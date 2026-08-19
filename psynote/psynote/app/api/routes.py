@@ -77,6 +77,24 @@ class ChatRequest(BaseModel):
     chat_history: list[ChatMessage] = []
 
 
+class RegisterRequest(BaseModel):
+    name: str
+    age: int | None = None
+    place: str | None = None
+    gender: str | None = None
+    marital_status: str | None = None
+
+
+class LoginRequest(BaseModel):
+    name: str
+
+
+class TextNoteRequest(BaseModel):
+    patient_id: str
+    title: str
+    content: str
+
+
 @app.get("/api/patients")
 def api_list_patients():
     return patients.list_patients()
@@ -94,7 +112,7 @@ def api_create_patient(body: PatientCreate):
 def api_get_patient(patient_id: str):
     patient = patients.get_patient(patient_id)
     if patient is None:
-        raise HTTPException(status_code=404, detail="Patient not found")
+        raise HTTPException(status_code=404, detail="User not found")
     return patient
 
 
@@ -105,7 +123,7 @@ def api_update_patient(patient_id: str, body: PatientUpdate):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if updated is None:
-        raise HTTPException(status_code=404, detail="Patient not found")
+        raise HTTPException(status_code=404, detail="User not found")
     return updated
 
 
@@ -113,12 +131,39 @@ def api_update_patient(patient_id: str, body: PatientUpdate):
 def api_delete_patient(patient_id: str):
     deleted = patients.delete_patient(patient_id)
     if not deleted:
-        raise HTTPException(status_code=404, detail="Patient not found")
+        raise HTTPException(status_code=404, detail="User not found")
 
 
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+# --- Registration / sign-in (frontend auth flow) -----------------------------
+# Stub auth carried forward from Phase 9: no passwords or tokens yet, just
+# enough to bind the frontend session to a patient record. The moment real
+# auth lands, these routes are the ones that change.
+
+@app.post("/api/register", status_code=201)
+def api_register(body: RegisterRequest):
+    try:
+        return patients.register_patient(
+            body.name,
+            age=body.age,
+            place=body.place,
+            gender=body.gender,
+            marital_status=body.marital_status,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/login")
+def api_login(body: LoginRequest):
+    patient = patients.get_patient_by_name(body.name)
+    if patient is None:
+        raise HTTPException(status_code=404, detail="No registered user with that name")
+    return patient
 
 
 # --- Ingestion (Section 3) ---------------------------------------------------
@@ -140,7 +185,7 @@ async def api_ingest(patient_id: str = Form(...), file: UploadFile = File(...)):
     """
     patient = patients.get_patient(patient_id)
     if patient is None:
-        raise HTTPException(status_code=404, detail="Patient not found")
+        raise HTTPException(status_code=404, detail="User not found")
 
     ext = "." + file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
     if ext not in SUPPORTED_EXTENSIONS:
@@ -160,12 +205,73 @@ async def api_ingest(patient_id: str = Form(...), file: UploadFile = File(...)):
     }
 
 
+@app.post("/api/notes/text", status_code=201)
+def api_create_text_note(body: TextNoteRequest):
+    """
+    Ingest a note typed directly into the app (no file upload). Same
+    pipeline as /api/ingest minus the parse step -- see
+    rag_pipeline.ingest_text. Pipeline failures surface as status="failed"
+    on a normal 201, same contract as /api/ingest.
+    """
+    patient = patients.get_patient(body.patient_id)
+    if patient is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    try:
+        result = rag_pipeline.ingest_text(body.patient_id, body.title, body.content)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {
+        "note_id": result.note_id,
+        "status": result.status,
+        "chunk_count": result.chunk_count,
+        "error": result.error,
+    }
+
+
 @app.get("/api/patients/{patient_id}/notes")
 def api_list_notes(patient_id: str, status: str | None = None):
     patient = patients.get_patient(patient_id)
     if patient is None:
-        raise HTTPException(status_code=404, detail="Patient not found")
+        raise HTTPException(status_code=404, detail="User not found")
     return doc_registry.list_notes_for_patient(patient_id, status=status)
+
+
+@app.get("/api/insights/{patient_id}")
+def api_insights(patient_id: str):
+    """
+    Emotional-energy report for the dashboard: per-note emotion scores
+    (happy / sad / stressed / anxious), overall averages, and per-emotion
+    reasons (matched terms + snippets attributed to their notes). See
+    core/emotion.py -- deterministic, offline, no model call.
+    """
+    patient = patients.get_patient(patient_id)
+    if patient is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    report = rag_pipeline.analyze_mood(patient_id)
+
+    return {
+        "notes": [
+            {
+                "note_id": n.note_id,
+                "title": n.title,
+                "created_at": n.created_at,
+                "scores": n.scores,
+                "dominant": max(n.scores, key=n.scores.get) if any(n.scores.values()) else "neutral",
+            }
+            for n in report.notes
+        ],
+        "overall": report.overall,
+        "reasons": {
+            emotion: [
+                {"note_id": r.note_id, "title": r.title, "term": r.term, "snippet": r.snippet, "count": r.count}
+                for r in hits
+            ]
+            for emotion, hits in report.reasons.items()
+        },
+    }
 
 
 # --- Query / chat (Section 4) -------------------------------------------------
@@ -180,7 +286,7 @@ def api_chat(body: ChatRequest):
     """
     patient = patients.get_patient(body.patient_id)
     if patient is None:
-        raise HTTPException(status_code=404, detail="Patient not found")
+        raise HTTPException(status_code=404, detail="User not found")
 
     if not body.question or not body.question.strip():
         raise HTTPException(status_code=400, detail="question cannot be empty")

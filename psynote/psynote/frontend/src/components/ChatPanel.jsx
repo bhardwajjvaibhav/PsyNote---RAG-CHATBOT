@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { askQuestion } from "../api/chat";
+import { theme } from "../theme";
 
 /**
  * ChatPanel
@@ -10,9 +11,9 @@ import { askQuestion } from "../api/chat";
  * since those are the point of the pipeline, not incidental metadata
  * to hide behind a tooltip.
  *
- * patient_id currently travels in the request body (see routes.py's
- * known-gap docstring: no auth yet, patient_id is not derived from a
- * session). This component just passes through whatever patientId its
+ * The account id currently travels in the request body (see routes.py's
+ * known-gap docstring: no auth yet, the id is not derived from a
+ * session). This component just passes through whatever account id its
  * parent gives it.
  */
 export default function ChatPanel({ patientId, patientName }) {
@@ -22,9 +23,9 @@ export default function ChatPanel({ patientId, patientName }) {
   const [errorMessage, setErrorMessage] = useState("");
   const scrollRef = useRef(null);
 
-  // Reset the thread when the selected patient changes -- a chat about
-  // patient A must never be sent as history alongside a question about
-  // patient B.
+  // Reset the thread when the selected account changes -- a chat about
+  // one person must never be sent as history alongside a question about
+  // another.
   useEffect(() => {
     setMessages([]);
     setErrorMessage("");
@@ -75,7 +76,7 @@ export default function ChatPanel({ patientId, patientName }) {
 
       <div ref={scrollRef} style={styles.scroll}>
         {messages.length === 0 && status !== "sending" && (
-          <div style={styles.emptyText}>Ask a question grounded in this patient's ingested notes.</div>
+          <div style={styles.emptyText}>Ask a question grounded in your notes.</div>
         )}
 
         {messages.map((m, i) => (
@@ -100,7 +101,7 @@ export default function ChatPanel({ patientId, patientName }) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Ask about this patient's notes…"
+          placeholder="Ask about your notes…"
           disabled={status === "sending"}
           style={styles.textarea}
         />
@@ -168,9 +169,9 @@ const styles = {
     display: "flex",
     flexDirection: "column",
     gap: "0.6rem",
-    maxWidth: "560px",
-    fontFamily: "system-ui, sans-serif",
-    marginTop: "1.25rem",
+    width: "100%",
+    maxWidth: "680px",
+    fontFamily: theme.font,
   },
   header: {
     display: "flex",
@@ -180,26 +181,27 @@ const styles = {
   label: {
     fontSize: "0.85rem",
     fontWeight: 600,
-    color: "#333",
+    color: theme.text,
   },
   patientTag: {
     fontSize: "0.8rem",
-    color: "#666",
+    color: theme.textMuted,
   },
   scroll: {
     display: "flex",
     flexDirection: "column",
     gap: "0.6rem",
-    maxHeight: "420px",
+    maxHeight: "60vh",
+    minHeight: "320px",
     overflowY: "auto",
-    padding: "0.5rem",
-    border: "1px solid #e0e0e0",
-    borderRadius: "8px",
-    background: "#fafafa",
+    padding: "1rem",
+    border: `1px solid ${theme.border}`,
+    borderRadius: theme.radius,
+    background: theme.bgRaised,
   },
   emptyText: {
     fontSize: "0.8rem",
-    color: "#666",
+    color: theme.textMuted,
   },
   messageRow: {
     display: "flex",
@@ -207,20 +209,21 @@ const styles = {
     gap: "0.35rem",
   },
   bubble: {
-    maxWidth: "440px",
-    padding: "0.55rem 0.8rem",
+    maxWidth: "520px",
+    padding: "0.6rem 0.85rem",
     borderRadius: "10px",
     fontSize: "0.9rem",
     lineHeight: 1.5,
+    whiteSpace: "pre-wrap",
   },
   bubbleUser: {
-    background: "#2f6fed",
-    color: "#fff",
+    background: `linear-gradient(135deg, ${theme.gold}, ${theme.mustard})`,
+    color: "#1a1405",
   },
   bubbleAssistant: {
-    background: "#fff",
-    border: "1px solid #e0e0e0",
-    color: "#222",
+    background: theme.bgPanel,
+    border: `1px solid ${theme.border}`,
+    color: theme.text,
   },
   metaColumn: {
     display: "flex",
@@ -234,28 +237,29 @@ const styles = {
   },
   chip: {
     fontSize: "0.7rem",
-    color: "#666",
-    background: "#eee",
+    color: theme.textMuted,
+    background: theme.bg,
+    border: `1px solid ${theme.border}`,
     padding: "0.15rem 0.5rem",
     borderRadius: "6px",
   },
   safetyBanner: {
-    border: "1px solid #b4491f",
-    background: "#fbe4dd",
-    color: "#7a3115",
+    border: `1px solid ${theme.danger}`,
+    background: "#331d15",
+    color: theme.danger,
     borderRadius: "8px",
     padding: "0.5rem 0.7rem",
     fontSize: "0.78rem",
-    maxWidth: "440px",
+    maxWidth: "520px",
   },
   flaggedBanner: {
-    border: "1px solid #d9a441",
-    background: "#fdf3d8",
-    color: "#5c4712",
+    border: "1px solid #6d5a1d",
+    background: "#332b16",
+    color: theme.mustard,
     borderRadius: "8px",
     padding: "0.5rem 0.7rem",
     fontSize: "0.78rem",
-    maxWidth: "440px",
+    maxWidth: "520px",
   },
   bannerTitle: {
     fontSize: "0.7rem",
@@ -275,26 +279,30 @@ const styles = {
     flex: 1,
     minHeight: "44px",
     resize: "none",
-    padding: "0.5rem 0.7rem",
+    padding: "0.6rem 0.8rem",
     fontSize: "0.9rem",
-    border: "1px solid #ccc",
-    borderRadius: "6px",
+    color: theme.text,
+    background: theme.bg,
+    border: `1px solid ${theme.border}`,
+    borderRadius: theme.radius,
     outline: "none",
-    fontFamily: "inherit",
+    fontFamily: theme.font,
+    boxSizing: "border-box",
   },
   button: {
     alignSelf: "flex-end",
     padding: "0.5rem 1.1rem",
     fontSize: "0.9rem",
     fontWeight: 600,
-    color: "#fff",
-    background: "#2f6fed",
+    color: "#1a1405",
+    background: `linear-gradient(135deg, ${theme.gold}, ${theme.mustard})`,
     border: "none",
-    borderRadius: "6px",
+    borderRadius: theme.radius,
     cursor: "pointer",
+    fontFamily: theme.font,
   },
   buttonDisabled: {
-    background: "#a9c0f0",
+    opacity: 0.6,
     cursor: "not-allowed",
   },
 };

@@ -52,3 +52,17 @@ export async function listNotes(patientId, status) {
   const res = await fetch(url);
   return handleResponse(res);
 }
+
+/**
+ * Ingest a note typed directly into the app (POST /api/notes/text).
+ * Same result contract as ingestNote: status can be "indexed" or
+ * "failed" on a normal 201 -- callers must check result.status.
+ */
+export async function createTextNote(patientId, title, content) {
+  const res = await fetch("/api/notes/text", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ patient_id: patientId, title, content }),
+  });
+  return handleResponse(res);
+}
